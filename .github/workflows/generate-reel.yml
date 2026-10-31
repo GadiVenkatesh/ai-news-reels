@@ -4,6 +4,18 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      duration:
+        description: "Output video duration"
+        required: true
+        type: choice
+        default: "60"
+        options:
+          - "30"
+          - "45"
+          - "60"
+          - "90"
+          - "120"
   schedule:
     # 09:00 India Standard Time (03:30 UTC)
     - cron: "30 3 * * *"
@@ -45,6 +57,7 @@ jobs:
           TTS_VOICE: en-US-GuyNeural
           TTS_RATE: "+12%"
           USE_OLLAMA: "false"
+          VIDEO_DURATION_SECONDS: ${{ inputs.duration || '60' }}
 
       - name: Upload generated video and source files
         uses: actions/upload-artifact@v4
