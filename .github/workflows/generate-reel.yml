@@ -1,6 +1,8 @@
 name: Generate AI News Reel
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     # 09:00 India Standard Time (03:30 UTC)
