@@ -370,8 +370,8 @@ def render(
     concat_path = work / "images.txt"
     entries = []
     for image_path in image_paths:
-        entries.append(f"file '{image_path.resolve().as_posix()}'\\nduration 15\\n")
-    entries.append(f"file '{image_paths[-1].resolve().as_posix()}'\\n")
+        entries.append(f"file '{image_path.resolve().as_posix()}'\nduration 15\n")
+    entries.append(f"file '{image_paths[-1].resolve().as_posix()}'\n")
     concat_path.write_text("".join(entries), encoding="utf-8")
 
     audio_duration = ffprobe_duration(audio_path)
