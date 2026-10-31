@@ -62,7 +62,7 @@ def extract_image_url(entry) -> str:
         str(entry.get(key, ""))
         for key in ("summary", "description", "content")
     )
-    match = re.search(r'<img[^>]+src=["\\']([^"\\']+)["\\']', html, re.I)
+    match = re.search(r"""<img[^>]+src=["']([^"']+)["']""", html, re.I)
     if match and match.group(1).startswith(("https://", "http://")):
         return match.group(1)
     return ""
