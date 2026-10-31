@@ -95,6 +95,10 @@ Copy `.env.example` to `.env` and adjust:
 - Review names, facts, pronunciation, narration timing, source attribution, and media rights before publishing.
 - The workflow stores output as an Actions artifact for 14 days; it does not post to social accounts.
 
+## Automatic social publishing
+
+A separate **Publish AI News Reel** workflow can publish generated videos to YouTube Shorts and Instagram Reels. See [Social Publishing Setup](docs/SOCIAL_PUBLISHING_SETUP.md) for the required OAuth credentials, Meta professional-account setup, temporary S3 hosting, GitHub Actions secrets/variables, and how to run the workflow. YouTube visibility defaults to private; change it only after testing. Instagram Reels publishing requires an eligible Business or Creator account.
+
 ## Project structure
 
 ```text
