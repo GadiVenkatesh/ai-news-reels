@@ -2,7 +2,7 @@
 
 Turn recent AI and technology news into an **exactly 60-second vertical 9:16 MP4** with Telugu or English narration and matching on-screen text.
 
-The workflow generates a downloadable artifact for you to review. It does **not** automatically publish to Instagram or YouTube.
+The workflow generates a downloadable artifact for review. A separate publishing workflow can automatically publish it to YouTube Shorts and Instagram Reels when configured.
 
 ## Features
 
@@ -93,11 +93,11 @@ Copy `.env.example` to `.env` and adjust:
 - Visuals use the selected article's thumbnail when the RSS feed exposes one. Some feeds do not provide images, so the app falls back to typographic cards. This version does not generate original images with a diffusion model. Telugu headline/summary translation requires access to Google's public translation endpoint.
 - Edge TTS needs an internet connection.
 - Review names, facts, pronunciation, narration timing, source attribution, and media rights before publishing.
-- The workflow stores output as an Actions artifact for 14 days; it does not post to social accounts.
+- The generation workflow stores output as an Actions artifact for 14 days. Social publishing is handled by the separate Publish AI News Reel workflow.
 
 ## Automatic social publishing
 
-A separate **Publish AI News Reel** workflow can publish generated videos to YouTube Shorts and Instagram Reels. See [Social Publishing Setup](docs/SOCIAL_PUBLISHING_SETUP.md) for the required OAuth credentials, Meta professional-account setup, temporary S3 hosting, GitHub Actions secrets/variables, and how to run the workflow. YouTube visibility defaults to private; change it only after testing. Instagram Reels publishing requires an eligible Business or Creator account.
+A separate **Publish AI News Reel** workflow can publish generated videos to YouTube Shorts and Instagram Reels. See [Social Publishing Setup](docs/SOCIAL_PUBLISHING_SETUP.md) for the required OAuth credentials, Meta professional-account setup, GitHub Actions secrets/variables, and how to run the workflow. Instagram uses direct resumable upload to Meta; no AWS or S3 setup is required. YouTube visibility defaults to private; change it only after testing. Instagram Reels publishing requires an eligible Business or Creator account.
 
 ## Project structure
 
