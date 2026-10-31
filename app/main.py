@@ -306,12 +306,8 @@ def make_card(
 
 
 def run_ffmpeg(args: list[str]) -> None:
-    subprocess.run(
-        args,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    # Keep FFmpeg diagnostics visible in GitHub Actions logs when a render fails.
+    subprocess.run(args, check=True)
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -348,58 +344,40 @@ def render(
     if not ffmpeg:
         raise RuntimeError("FFmpeg not found. Install FFmpeg and verify PATH.")
 
+    # Build a 60-second slideshow using image inputs directly. This avoids
+    # encoding multiple MP4 files and then concatenating those MP4 streams.
     work = video_path.parent / "render_tmp"
     work.mkdir(parents=True, exist_ok=True)
-    clips: list[Path] = []
-    scene_duration = 15
+    image_paths: list[Path] = []
 
-    for index, scene in enumerate(scenes):
+    for index, scene in enumerate(scenes[:4]):
         image_path = work / f"scene_{index + 1:02d}.png"
-        clip_path = work / f"clip_{index + 1:02d}.mp4"
         make_card(
             image_path,
             str(scene.get("heading", "AI UPDATE")),
             str(scene.get("caption", "")),
             story["source"],
             index + 1,
-            len(scenes),
+            min(len(scenes), 4),
             width,
             height,
         )
-        run_ffmpeg(
-            [
-                ffmpeg,
-                "-y",
-                "-loop",
-                "1",
-                "-framerate",
-                "30",
-                "-i",
-                str(image_path),
-                "-t",
-                str(scene_duration),
-                "-an",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-pix_fmt",
-                "yuv420p",
-                "-r",
-                "30",
-                "-vf",
-                f"scale={width}:{height},format=yuv420p",
-                str(clip_path),
-            ]
-        )
-        clips.append(clip_path)
+        image_paths.append(image_path)
 
-    concat_path = work / "concat.txt"
-    concat_path.write_text(
-        "".join(f"file '{clip.as_posix()}'\n" for clip in clips),
-        encoding="utf-8",
-    )
-    silent_video = work / "silent-60s.mp4"
+    if not image_paths:
+        raise RuntimeError("No scene cards were generated.")
+
+    concat_path = work / "images.txt"
+    entries = []
+    for image_path in image_paths:
+        entries.append(f"file '{image_path.resolve().as_posix()}'\\nduration 15\\n")
+    entries.append(f"file '{image_paths[-1].resolve().as_posix()}'\\n")
+    concat_path.write_text("".join(entries), encoding="utf-8")
+
+    audio_duration = ffprobe_duration(audio_path)
+    atempo = min(1.5, max(1.0, audio_duration / 59.0))
+    audio_filter = f"atempo={atempo:.5f},apad,atrim=duration=60"
+
     run_ffmpeg(
         [
             ffmpeg,
@@ -410,52 +388,34 @@ def render(
             "0",
             "-i",
             str(concat_path),
-            "-t",
-            "60",
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-pix_fmt",
-            "yuv420p",
-            str(silent_video),
-        ]
-    )
-
-    # The final MP4 is 60 seconds. Long narration is sped up modestly (up to
-    # 1.5x); shorter narration is padded with silence at the end.
-    audio_duration = ffprobe_duration(audio_path)
-    atempo = min(1.5, max(1.0, audio_duration / 59.0))
-    audio_filter = f"atempo={atempo:.5f},apad,atrim=duration=60"
-    run_ffmpeg(
-        [
-            ffmpeg,
-            "-y",
-            "-i",
-            str(silent_video),
             "-i",
             str(audio_path),
             "-map",
             "0:v:0",
             "-map",
             "1:a:0",
+            "-vf",
+            f"scale={width}:{height},fps=30,format=yuv420p",
             "-af",
             audio_filter,
             "-t",
             "60",
             "-c:v",
-            "copy",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
             "-c:a",
             "aac",
             "-b:a",
             "128k",
+            "-shortest",
             "-movflags",
             "+faststart",
             str(video_path),
         ]
     )
-
 
 def main() -> None:
     output = Path(os.getenv("OUTPUT_DIR", "output"))
