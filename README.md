@@ -1,6 +1,6 @@
 # AI News Reels
 
-Turn recent AI and technology news into a **60-second vertical 9:16 MP4** with a generated voice-over and four on-screen scene cards.
+Turn recent AI and technology news into an **exactly 60-second vertical 9:16 MP4** with Telugu or English narration and matching on-screen text.
 
 The workflow generates a downloadable artifact for you to review. It does **not** automatically publish to Instagram or YouTube.
 
@@ -8,12 +8,13 @@ The workflow generates a downloadable artifact for you to review. It does **not*
 
 - Reads recent articles from configurable RSS feeds.
 - Ranks stories using topic keywords and publication recency.
-- Creates a short factual narration using optional local Ollama, with a template fallback.
+- Lets you select **Telugu or English** when manually running the GitHub Actions workflow; Telugu is the default for scheduled runs.
+- Creates a factual narration in the selected language using a template fallback (optional local Ollama is available for local runs).
 - Generates voice-over audio with Edge TTS.
 - Downloads an article thumbnail from RSS media fields or article summary HTML when available, then uses it as a darkened full-screen background behind each scene's text.
 - Falls back to designed text cards when the selected RSS item has no downloadable image.
-- Renders four 15-second scenes into a 1080×1920 H.264/AAC MP4.
-- Targets a 60-second output: shorter voice-overs are padded with silence; longer ones are sped up by up to 1.5× before the 60-second trim.
+- Renders four 15-second scenes into a 1080×1920 H.264/AAC MP4, with final duration checked by `ffprobe`.
+- Always renders a fixed 60-second MP4; duration is not a workflow option. The audio is trimmed/padded to the same 60-second timeline.
 - Saves the MP4, script JSON, voice-over MP3, and source note under `output/`.
 
 ## Requirements
@@ -63,7 +64,8 @@ Set `USE_OLLAMA=true` in `.env`. The app calls the local Ollama HTTP API. When O
 1. Open the repository's **Actions** tab and enable workflows if GitHub prompts you.
 2. Select **Generate AI News Reel**.
 3. Click **Run workflow** to start it manually.
-4. When the run completes, open it and download the `ai-news-reel-*` artifact.
+4. Choose **Telugu (`te`)** or **English (`en`)** in the Language dropdown. The video duration is fixed at 60 seconds.
+5. When the run completes, open it and download the `ai-news-reel-*` artifact.
 
 The workflow is also scheduled daily at **03:30 UTC / 09:00 India Standard Time**.
 
@@ -76,7 +78,8 @@ Copy `.env.example` to `.env` and adjust:
 | `RSS_FEEDS` | Comma-separated RSS feed URLs |
 | `TOPIC_KEYWORDS` | Comma-separated keywords used for relevance ranking |
 | `MAX_STORY_AGE_HOURS` | Maximum article age |
-| `TTS_VOICE` | Edge TTS voice |
+| `LANGUAGE` | `te` for Telugu or `en` for English; defaults to Telugu in GitHub Actions |
+| `TTS_VOICE` | Optional Edge TTS voice override; defaults based on language |
 | `TTS_RATE` | Speech rate adjustment |
 | `TTS_PITCH` | Voice pitch adjustment |
 | `USE_OLLAMA` | Enable local Ollama script generation |
@@ -87,7 +90,7 @@ Copy `.env.example` to `.env` and adjust:
 ## Limitations and review
 
 - Keyword ranking is a simple relevance heuristic; it is not a measure of global trend popularity.
-- Visuals use the selected article's thumbnail when the RSS feed exposes one. Some feeds do not provide images, so the app falls back to typographic cards. This version does not generate original images with a diffusion model.
+- Visuals use the selected article's thumbnail when the RSS feed exposes one. Some feeds do not provide images, so the app falls back to typographic cards. This version does not generate original images with a diffusion model. Telugu headline/summary translation requires access to Google's public translation endpoint.
 - Edge TTS needs an internet connection.
 - Review names, facts, pronunciation, narration timing, source attribution, and media rights before publishing.
 - The workflow stores output as an Actions artifact for 14 days; it does not post to social accounts.
