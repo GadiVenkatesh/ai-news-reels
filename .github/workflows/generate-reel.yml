@@ -9,10 +9,10 @@ on:
         description: "Language for narration and on-screen text"
         required: true
         type: choice
-        default: "te"
+        default: "Telugu"
         options:
-          - "te"
-          - "en"
+          - "Telugu"
+          - "English"
   schedule:
     # 09:00 India Standard Time (03:30 UTC)
     - cron: "30 3 * * *"
@@ -51,7 +51,7 @@ jobs:
         run: python -m app.main
         env:
           OUTPUT_DIR: output
-          LANGUAGE: ${{ inputs.language || 'te' }}
+          LANGUAGE: ${{ inputs.language == 'English' && 'en' || 'te' }}
           TTS_RATE: "+12%"
           USE_OLLAMA: "false"
 
