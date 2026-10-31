@@ -202,6 +202,10 @@ def fallback_script(story: dict, language: str = "en") -> dict:
             f"ఇది మీ రోజువారీ ఏఐ టెక్నాలజీ వార్త. {story['title']}. "
             f"{story['source']} కథనం ప్రకారం, {summary} "
             "ఈ పరిణామం ఏఐ వినియోగదారులు, డెవలపర్లు, వ్యాపారాలపై ఎలా ప్రభావం చూపుతుందో గమనించాలి. "
+            "ఈ వార్తలోని వివరాలు ప్రచురణ సమయంలో అందుబాటులో ఉన్న సమాచారంపై ఆధారపడి ఉన్నాయి. "
+            "తదుపరి అధికారిక ప్రకటనలు, కొత్త వివరాలు వచ్చినప్పుడు పరిస్థితి మారవచ్చు. "
+            "ఈ టెక్నాలజీ అందుబాటులోకి వచ్చే సమయం, ఉపయోగించే విధానం, నిజ జీవితంలో దాని ఫలితాలను గమనించండి. "
+            "ఏదైనా నిర్ణయం తీసుకునే ముందు అసలు వార్తా మూలాన్ని పరిశీలించండి. "
             "మరిన్ని వివరాల కోసం మూల కథనాన్ని చూడండి."
         )
         scenes = [
@@ -215,7 +219,11 @@ def fallback_script(story: dict, language: str = "en") -> dict:
             f"Here is your AI tech update. {story['title']}. "
             f"According to {story['source']}, {summary} "
             "The key takeaway is to watch how this development affects AI users, "
-            "developers, and businesses. Check the source link for the full report."
+            "developers, and businesses. The details in this video reflect information "
+            "available when the source report was published, and new official updates may change the picture. "
+            "Watch for availability, practical results, and further announcements before drawing conclusions. "
+            "Always read the original report before making decisions. We will continue to explain "
+            "important AI and technology updates in simple terms. Check the source link for the full report."
         )
         scenes = [
             {"heading": "AI TECH UPDATE", "caption": story["title"]},
@@ -261,7 +269,7 @@ def make_script(story: dict, language: str = "en") -> dict:
         return data
     except Exception as exc:
         print(f"[WARN] Ollama unavailable; using template script: {exc}")
-        return fallback_script(story)
+        return fallback_script(story, language)
 
 
 async def tts(text: str, path: Path, language: str = "en") -> None:
@@ -280,6 +288,9 @@ def font(size: int, bold: bool = False):
         "C:/Windows/Fonts/arialbd.ttf"
         if bold
         else "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansTelugu-Bold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         if bold
         else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -494,7 +505,7 @@ def render(
 
     audio_duration = ffprobe_duration(audio_path)
     # Keep the complete voice-over inside 60 seconds; pad silence only if it is shorter.
-    atempo = min(2.0, max(1.0, audio_duration / 59.5))
+    atempo = min(2.0, max(0.5, audio_duration / 59.5))
     filters.append(f"[4:a]atempo={atempo:.5f},apad,atrim=duration=60,asetpts=PTS-STARTPTS[a]")
     args.extend([
         "-filter_complex", ";".join(filters),
