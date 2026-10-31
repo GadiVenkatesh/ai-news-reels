@@ -1,66 +1,60 @@
 # Social publishing setup
 
-The existing Generate AI News Reel workflow still produces the fixed 60-second, 1080x1920 MP4. The separate Publish AI News Reel workflow downloads that generated artifact and publishes it.
+The Generate AI News Reel workflow produces the fixed 60-second, 1080x1920 MP4. The separate Publish AI News Reel workflow downloads that artifact and publishes it.
 
 ## How it works
 
 1. Generate AI News Reel completes successfully.
 2. Publish AI News Reel downloads the generated MP4 and adjacent JSON metadata.
-3. app/publish.py prepares platform-specific title, description, source attribution and hashtags using the generated story metadata.
-4. The YouTube Data API uploads the MP4 using OAuth 2.0 refresh-token credentials.
-5. For Instagram, the workflow uploads the MP4 to a private S3 bucket and creates a short-lived presigned GET URL. Meta fetches the video URL, the workflow polls the Reel container until FINISHED, and then calls media_publish.
-6. The workflow attempts to delete the temporary S3 object and saves publishing-report.json as an Actions artifact.
+3. `app/publish.py` prepares platform-specific title, description, source attribution and hashtags.
+4. YouTube Data API uploads the local MP4 using OAuth 2.0 refresh-token credentials.
+5. Instagram publishing creates a resumable Reel container, uploads the MP4 bytes directly to Meta's `rupload.facebook.com` endpoint, waits for processing, then calls `media_publish`.
+6. The workflow saves `publishing-report.json` as an Actions artifact.
 
-The workflow is separate from the generator to keep rendering and publishing independently observable.
+**No AWS account, S3 bucket, AWS credentials, AWS Region, or temporary public video hosting is used.**
 
 ## Required GitHub repository secrets
 
 ### YouTube
 
-- YOUTUBE_CLIENT_ID
-- YOUTUBE_CLIENT_SECRET
-- YOUTUBE_REFRESH_TOKEN
+- `YOUTUBE_CLIENT_ID`
+- `YOUTUBE_CLIENT_SECRET`
+- `YOUTUBE_REFRESH_TOKEN`
 
-Enable YouTube Data API v3 in a Google Cloud project, configure an OAuth consent screen, create an OAuth client, and authorize the YouTube channel with the youtube.upload scope. Store the resulting refresh token as a GitHub Actions secret. Do not commit OAuth client files or tokens.
+Enable YouTube Data API v3 in a Google Cloud project, configure an OAuth consent screen, create an OAuth client, and authorize the YouTube channel with the `youtube.upload` scope. Store the resulting refresh token as a GitHub Actions secret. Never commit tokens or client secrets.
 
-### Instagram + temporary S3 hosting
+### Instagram
 
-- INSTAGRAM_USER_ID
-- INSTAGRAM_ACCESS_TOKEN
-- AWS_ACCESS_KEY_ID
-- AWS_SECRET_ACCESS_KEY
-- AWS_REGION
-- PUBLISH_S3_BUCKET
+- `INSTAGRAM_USER_ID`
+- `INSTAGRAM_ACCESS_TOKEN`
 
-The Instagram account must be a professional Business or Creator account with publishing access configured in a Meta developer app. For the Facebook Login integration, link the Instagram professional account to a Facebook Page and grant the permissions required by the selected Meta API setup, including instagram_content_publish and the relevant account/page read permissions. Use a token with the account and publishing access required by your app.
+Set the repository variable `META_GRAPH_API_VERSION` to a currently supported version used by your Meta app.
 
-Create a private S3 bucket. The publishing workflow uploads one object, creates a time-limited signed GET URL for Meta's fetch, and deletes the object after publishing. The IAM principal should have only the necessary S3 PutObject, GetObject (for presigning), and DeleteObject permissions on the publishing prefix/bucket. Avoid public bucket access.
+**Important API requirement:** this direct/resumable video upload flow is documented for Meta apps using **Facebook Login for Business**. Your Instagram professional account (Business or Creator) must have publishing access and the relevant Meta app permissions. If your app uses Instagram Login instead, verify its supported publishing flow before using this direct upload implementation.
 
-## GitHub Actions repository variables
+## Optional GitHub repository variables
 
-- META_GRAPH_API_VERSION: set this to a currently supported Graph API version, e.g. the version selected in your Meta app. Do not leave the workflow's vXX.X placeholder.
-- YOUTUBE_PRIVACY_STATUS: recommended first-run value private; set public only when ready for unattended public release.
-- YOUTUBE_CATEGORY_ID: defaults to 28 (Science & Technology).
+- `YOUTUBE_PRIVACY_STATUS`: defaults to `private` for safer initial testing; set to `public` when you explicitly want unattended public publishing.
+- `YOUTUBE_CATEGORY_ID`: defaults to `28` (Science & Technology).
+- `META_GRAPH_API_VERSION`: required for Instagram publishing; do not leave the `vXX.X` placeholder.
 
 ## Run
 
 - Automatic: a successful Generate AI News Reel run triggers publishing to both platforms.
-- Manual: open Actions -> Publish AI News Reel -> Run workflow, choose both/youtube/instagram and type PUBLISH.
-- Manual publishing downloads the named artifact from the supplied generation run ID. Supply the Generate workflow run ID in artifact_run_id.
+- Manual: Actions -> Publish AI News Reel -> Run workflow, choose `both`, `youtube`, or `instagram`, and type `PUBLISH` to confirm.
+- The generated artifact must be available to the workflow. For manual runs, use the generation run ID and artifact name expected by the generator workflow.
 
-YouTube's privacy setting defaults to private. The automatic workflow uses that configured value. For a cautious first test, set YOUTUBE_PRIVACY_STATUS=private and use a test Instagram account or turn off Instagram until credentials are verified.
+YouTube defaults to private. Test with YouTube privacy set to private and a test Instagram account before enabling routine public publishing.
 
-## Metadata and hashtags
+## Captions and attribution
 
-The publisher uses the generated story title/source/URL, not a second unrelated search. It creates concise Telugu or English captions, credits the source publisher and links to the original story. Hashtags are a small topic-relevant starter set; they are not live popularity rankings and should be reviewed for the channel's audience. Do not add unrelated trending tags. YouTube's tags and description are set separately from Instagram's caption.
+The publisher uses the generated story title, source publisher and source URL to create the title, description, caption and hashtags. Hashtags are topic-relevant defaults, not guaranteed reach or popularity rankings. Check that your use of the underlying source material complies with its licensing and attribution requirements.
 
-This is organic content publishing, not paid advertising or Ads Manager campaign creation. It does not create ad campaigns, spend budget, guarantee reach, or claim that hashtags are guaranteed to increase views.
+This is organic content publishing, not paid advertising. It does not create ad campaigns, spend budget, or guarantee reach.
 
-## Important deployment notes
+## Operational notes
 
-- Instagram Reels API publishing is only for eligible professional accounts and requires the media to be fetchable by Meta. The workflow uses S3 presigned URL for this.
-- Ensure the video meets Meta's current file-size, codec, aspect-ratio, audio and duration requirements. The generator produces 1080x1920 H.264/AAC, 60 seconds.
-- Keep the Meta Graph API version current and supported by the Meta app.
-- GitHub's workflow_run trigger runs with the default branch context. Protect the main branch and review workflow changes. Limit publishing secrets to the minimum trusted actors and use GitHub environments/required reviewers for production credentials.
-- GitHub Actions artifacts are retention-limited; publishing is triggered immediately after generation, not after downloading the artifact manually.
-- Instagram may fail independently of YouTube. Check the report artifact and job logs.
+- Instagram direct upload requires an eligible professional account, correct app permissions, and a supported Meta Graph API version.
+- The generated video must meet Meta's current Reels requirements. The generator targets 1080x1920 H.264/AAC at 60 seconds.
+- Instagram and YouTube can fail independently; inspect the Actions logs and the publishing report artifact.
+- Keep publishing secrets restricted to trusted maintainers and consider GitHub environment approvals for public publishing.
