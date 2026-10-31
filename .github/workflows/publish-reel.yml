@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: "Generate workflow run ID (leave empty to use latest successful run)"
+        description: "Generate workflow run ID (leave empty to use this workflow run; artifact naming must match the generator)"
         required: false
         type: string
       publish_to:
@@ -36,6 +36,9 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      OUTPUT_DIR: output
+      PUBLISH_TO: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to || 'both' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -60,19 +63,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id || inputs.artifact_run_id || github.run_id }}
 
       - name: Validate generated files and build metadata
-        run: |
-          python -m app.publish --prepare
-        env:
-          OUTPUT_DIR: output
-          PUBLISH_TO: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to || 'both' }}
-
-      - name: Configure AWS credentials
-        if: ${{ env.PUBLISH_TO != 'youtube' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+        run: python -m app.publish --prepare
 
       - name: Publish to YouTube Shorts
         if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'youtube' }}
@@ -84,30 +75,13 @@ jobs:
           YOUTUBE_CATEGORY_ID: ${{ vars.YOUTUBE_CATEGORY_ID || '28' }}
         run: python -m app.publish --youtube
 
-      - name: Upload video to temporary public S3 object
-        if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram' }}
-        id: video-host
-        env:
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: python -m app.publish --host-video
-
-      - name: Publish Instagram Reel
+      - name: Publish Instagram Reel using direct resumable upload
         if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram' }}
         env:
           INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           META_GRAPH_API_VERSION: ${{ vars.META_GRAPH_API_VERSION || 'vXX.X' }}
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: python -m app.publish --instagram
-
-      - name: Delete temporary S3 video
-        if: ${{ always() && (env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram') }}
-        env:
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: python -m app.publish --cleanup || true
 
       - name: Upload publishing report
         if: always()
