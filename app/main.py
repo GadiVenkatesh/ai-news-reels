@@ -42,6 +42,54 @@ def published(entry) -> datetime:
     return datetime.now(timezone.utc) - timedelta(hours=1)
 
 
+def extract_image_url(entry) -> str:
+    """Best-effort thumbnail discovery from common RSS image fields."""
+    for field in ("media_thumbnail", "media_content", "image", "thumbnail"):
+        value = entry.get(field)
+        if isinstance(value, list) and value:
+            value = value[0]
+        if isinstance(value, dict):
+            url = value.get("url") or value.get("href")
+            if url and str(url).startswith(("https://", "http://")):
+                return str(url)
+    for enclosure in entry.get("enclosures", []) or []:
+        if isinstance(enclosure, dict):
+            url = enclosure.get("href") or enclosure.get("url")
+            mime = enclosure.get("type", "")
+            if url and (mime.startswith("image/") or re.search(r"\\.(jpg|jpeg|png|webp)(?:\\?|$)", url, re.I)):
+                return str(url)
+    html = " ".join(
+        str(entry.get(key, ""))
+        for key in ("summary", "description", "content")
+    )
+    match = re.search(r'<img[^>]+src=["\\']([^"\\']+)["\\']', html, re.I)
+    if match and match.group(1).startswith(("https://", "http://")):
+        return match.group(1)
+    return ""
+
+
+def download_story_image(story: dict, destination: Path) -> Path | None:
+    """Download the article thumbnail when the feed provides one."""
+    url = story.get("image_url")
+    if not url:
+        return None
+    try:
+        response = requests.get(
+            url,
+            timeout=20,
+            headers={"User-Agent": "ai-news-reels/1.0 (+RSS thumbnail fetch)"},
+        )
+        response.raise_for_status()
+        from io import BytesIO
+        image = Image.open(BytesIO(response.content)).convert("RGB")
+        image.thumbnail((1080, 1920))
+        image.save(destination, format="JPEG", quality=90)
+        return destination
+    except Exception as exc:
+        print(f"[WARN] Could not download article thumbnail: {exc}")
+        return None
+
+
 def get_story() -> dict:
     default_feeds = (
         "https://www.technologyreview.com/feed/,"
@@ -98,6 +146,7 @@ def get_story() -> dict:
                             "source": source,
                             "published": date.isoformat(),
                             "score": score,
+                            "image_url": extract_image_url(item),
                         }
                     )
                     seen.add(link)
@@ -239,8 +288,28 @@ def make_card(
     total: int,
     width: int,
     height: int,
+    photo_path: Path | None = None,
 ) -> None:
-    image = Image.new("RGB", (width, height), (12, 18, 38))
+    # Use the real article thumbnail as a full-bleed background when available.
+    if photo_path and photo_path.exists():
+        with Image.open(photo_path) as source_image:
+            source_image = source_image.convert("RGB")
+            src_ratio = source_image.width / source_image.height
+            target_ratio = width / height
+            if src_ratio > target_ratio:
+                new_w = int(source_image.height * target_ratio)
+                left = (source_image.width - new_w) // 2
+                source_image = source_image.crop((left, 0, left + new_w, source_image.height))
+            else:
+                new_h = int(source_image.width / target_ratio)
+                top = (source_image.height - new_h) // 2
+                source_image = source_image.crop((0, top, source_image.width, top + new_h))
+            image = source_image.resize((width, height))
+        # Dark translucent overlay keeps white headline text readable.
+        overlay = Image.new("RGBA", (width, height), (4, 10, 26, 145))
+        image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+    else:
+        image = Image.new("RGB", (width, height), (12, 18, 38))
     draw = ImageDraw.Draw(image)
     margin = int(width * 0.085)
     draw.rounded_rectangle(
@@ -349,6 +418,11 @@ def render(
     work = video_path.parent / "render_tmp"
     work.mkdir(parents=True, exist_ok=True)
     image_paths: list[Path] = []
+    photo_path = download_story_image(story, work / "article-thumbnail.jpg")
+    if photo_path:
+        print("[INFO] Using the article thumbnail as the scene background.")
+    else:
+        print("[WARN] This feed item has no downloadable thumbnail; using designed cards.")
 
     for index, scene in enumerate(scenes[:4]):
         image_path = work / f"scene_{index + 1:02d}.png"
@@ -361,6 +435,7 @@ def render(
             min(len(scenes), 4),
             width,
             height,
+            photo_path=photo_path,
         )
         image_paths.append(image_path)
 
