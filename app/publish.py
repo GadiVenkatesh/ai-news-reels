@@ -9,7 +9,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import requests
 
@@ -43,49 +42,31 @@ def load_generated() -> tuple[Path, dict[str, Any]]:
 
 def make_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     lang = os.getenv("LANGUAGE", "te").lower()
-    title = re.sub(r"\s+", " ", str(metadata.get("title") or "AI News Update")).strip()
-    title = title[:95]
+    title = re.sub(r"\s+", " ", str(metadata.get("title") or "AI News Update")).strip()[:95]
     source = metadata["source"]
     publisher = str(source.get("source", "Original source"))
     source_url = str(source.get("url", ""))
-    tags = [
-        "AI", "ArtificialIntelligence", "Technology", "TechNews",
-        "AIUpdates", "MachineLearning", "Shorts", "Reels",
-    ]
+    tags = ["AI", "ArtificialIntelligence", "Technology", "TechNews", "AIUpdates",
+            "MachineLearning", "Shorts", "Reels"]
     if lang == "te":
-        caption = (
-            f"🚀 తాజా AI & టెక్నాలజీ అప్‌డేట్!\n\n"
-            f"{title}\n\n"
-            f"ఈ వార్త ఎందుకు ముఖ్యమో 60 సెకన్లలో తెలుసుకోండి.\n"
-            f"మూలం: {publisher}\n"
-            f"పూర్తి కథనం: {source_url}\n\n"
-            "#TeluguTech #AITelugu #TechNews #AIUpdates #ArtificialIntelligence "
-            "#Technology #MachineLearning #TeluguReels #TeluguShorts #DailyTech"
-        )
+        caption = (f"🚀 తాజా AI & టెక్నాలజీ అప్‌డేట్!\n\n{title}\n\n"
+                   f"ఈ వార్త ఎందుకు ముఖ్యమో 60 సెకన్లలో తెలుసుకోండి.\n"
+                   f"మూలం: {publisher}\nపూర్తి కథనం: {source_url}\n\n"
+                   "#TeluguTech #AITelugu #TechNews #AIUpdates #ArtificialIntelligence "
+                   "#Technology #MachineLearning #TeluguReels #TeluguShorts #DailyTech")
     else:
-        caption = (
-            f"🚀 Your 60-second AI & technology briefing.\n\n"
-            f"{title}\n\n"
-            f"Why it matters, explained simply.\n"
-            f"Source: {publisher}\n"
-            f"Read the full report: {source_url}\n\n"
-            "#AI #TechNews #ArtificialIntelligence #AIUpdates #Technology "
-            "#MachineLearning #TechReels #YouTubeShorts #DailyTech"
-        )
-    description = (
-        caption + "\n\n"
-        "News summary for education and information. Details may evolve; "
-        "please read the original source linked above. "
-        "All trademarks and article rights belong to their respective owners."
-    )
+        caption = (f"🚀 Your 60-second AI & technology briefing.\n\n{title}\n\n"
+                   f"Why it matters, explained simply.\nSource: {publisher}\n"
+                   f"Read the full report: {source_url}\n\n"
+                   "#AI #TechNews #ArtificialIntelligence #AIUpdates #Technology "
+                   "#MachineLearning #TechReels #YouTubeShorts #DailyTech")
+    description = (caption + "\n\nNews summary for education and information. Details may evolve; "
+                   "please read the original source linked above. "
+                   "All trademarks and article rights belong to their respective owners.")
     return {
         "title": title + (" | AI News #Shorts" if len(title) < 75 else ""),
-        "caption": caption[:2200],
-        "description": description[:4900],
-        "tags": tags,
-        "language": lang,
-        "source_url": source_url,
-        "publisher": publisher,
+        "caption": caption[:2200], "description": description[:4900], "tags": tags,
+        "language": lang, "source_url": source_url, "publisher": publisher,
     }
 
 
@@ -100,14 +81,11 @@ def prepare() -> None:
     (ROOT / "social-metadata.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    report = {
-        "video": video.name,
-        "video_bytes": video.stat().st_size,
+    write_report({
+        "video": video.name, "video_bytes": video.stat().st_size,
         "metadata_file": "social-metadata.json",
-        "youtube": {"status": "pending"},
-        "instagram": {"status": "pending"},
-    }
-    write_report(report)
+        "youtube": {"status": "pending"}, "instagram": {"status": "pending"},
+    })
     print(f"Prepared publishing metadata for {video.name}")
 
 
@@ -121,8 +99,7 @@ def youtube_upload() -> None:
     video, _ = load_generated()
     meta = json.loads((ROOT / "social-metadata.json").read_text(encoding="utf-8"))
     credentials = Credentials(
-        None,
-        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+        None, refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
         token_uri="https://oauth2.googleapis.com/token",
         client_id=os.environ["YOUTUBE_CLIENT_ID"],
         client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
@@ -132,9 +109,7 @@ def youtube_upload() -> None:
     youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
     body = {
         "snippet": {
-            "title": meta["title"],
-            "description": meta["description"],
-            "tags": meta["tags"],
+            "title": meta["title"], "description": meta["description"], "tags": meta["tags"],
             "categoryId": os.getenv("YOUTUBE_CATEGORY_ID", "28"),
             "defaultLanguage": "te" if meta["language"] == "te" else "en",
         },
@@ -143,7 +118,8 @@ def youtube_upload() -> None:
             "selfDeclaredMadeForKids": False,
         },
     }
-    media = MediaFileUpload(str(video), mimetype="video/mp4", chunksize=8 * 1024 * 1024, resumable=True)
+    media = MediaFileUpload(str(video), mimetype="video/mp4",
+                            chunksize=8 * 1024 * 1024, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = None
     while response is None:
@@ -153,8 +129,7 @@ def youtube_upload() -> None:
     video_id = response["id"]
     report = json.loads(REPORT.read_text(encoding="utf-8"))
     report["youtube"] = {
-        "status": "uploaded",
-        "video_id": video_id,
+        "status": "uploaded", "video_id": video_id,
         "url": f"https://www.youtube.com/shorts/{video_id}",
         "privacy_status": body["status"]["privacyStatus"],
     }
@@ -162,35 +137,9 @@ def youtube_upload() -> None:
     print(f"YouTube upload complete: https://www.youtube.com/shorts/{video_id}")
 
 
-def s3_client():
-    import boto3
-    return boto3.client("s3", region_name=os.getenv("AWS_REGION"))
-
-
-def host_video() -> None:
-    require_env("S3_BUCKET", "AWS_REGION")
-    video, _ = load_generated()
-    key = f"ai-news-reels/{video.name}"
-    s3 = s3_client()
-    s3.upload_file(
-        str(video),
-        os.environ["S3_BUCKET"],
-        key,
-        ExtraArgs={"ContentType": "video/mp4", "CacheControl": "public, max-age=3600"},
-    )
-    # A short-lived signed URL is publicly fetchable by Meta during processing.
-    url = s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": os.environ["S3_BUCKET"], "Key": key},
-        ExpiresIn=6 * 60 * 60,
-    )
-    (ROOT / "instagram-video-url.txt").write_text(url, encoding="utf-8")
-    (ROOT / "s3-object-key.txt").write_text(key, encoding="utf-8")
-    print("Uploaded video to temporary S3 object and generated a 6-hour URL.")
-
-
 def graph_request(method: str, path: str, **kwargs) -> dict[str, Any]:
-    response = requests.request(method, f"{GRAPH_BASE}/{path.lstrip('/')}", timeout=TIMEOUT, **kwargs)
+    response = requests.request(method, f"{GRAPH_BASE}/{path.lstrip('/')}",
+                                timeout=TIMEOUT, **kwargs)
     try:
         payload = response.json()
     except ValueError:
@@ -201,31 +150,48 @@ def graph_request(method: str, path: str, **kwargs) -> dict[str, Any]:
 
 
 def instagram_publish() -> None:
-    require_env("INSTAGRAM_USER_ID", "INSTAGRAM_ACCESS_TOKEN")
+    require_env("INSTAGRAM_USER_ID", "INSTAGRAM_ACCESS_TOKEN", "META_GRAPH_API_VERSION")
     if GRAPH_VERSION == "vXX.X":
         raise RuntimeError("Set META_GRAPH_API_VERSION to a currently supported Meta Graph API version.")
     video, _ = load_generated()
-    url_file = ROOT / "instagram-video-url.txt"
-    if not url_file.exists():
-        raise FileNotFoundError("Run --host-video before --instagram")
-    video_url = url_file.read_text(encoding="utf-8").strip()
-    meta = json.loads((ROOT / "social-metadata.json").read_text(encoding="utf-8"))
-    token = os.environ["INSTAGRAM_ACCESS_TOKEN"]
-    # Instagram media must meet Meta's documented Reels specifications.
     if video.stat().st_size > 1_000_000_000:
         raise ValueError("Instagram Reels publishing supports a maximum 1 GB video file.")
+    meta = json.loads((ROOT / "social-metadata.json").read_text(encoding="utf-8"))
+    token = os.environ["INSTAGRAM_ACCESS_TOKEN"]
+
+    # Resumable direct upload sends the generated file bytes to Meta; no public URL or cloud bucket.
+    # Meta documents this path for apps using Facebook Login for Business.
     create = graph_request(
-        "POST",
-        f"{os.environ['INSTAGRAM_USER_ID']}/media",
+        "POST", f"{os.environ['INSTAGRAM_USER_ID']}/media",
         data={
             "media_type": "REELS",
-            "video_url": video_url,
+            "upload_type": "resumable",
             "caption": meta["caption"],
             "share_to_feed": "true",
             "access_token": token,
         },
     )
-    container_id = create["id"]
+    container_id = create.get("id")
+    upload_uri = create.get("uri") or f"https://rupload.facebook.com/ig-api-upload/{container_id}"
+    if not container_id:
+        raise RuntimeError(f"Instagram did not return a media container ID: {create}")
+    file_size = video.stat().st_size
+    headers = {
+        "Authorization": f"OAuth {token}",
+        "offset": "0",
+        "file_size": str(file_size),
+        "Content-Type": "video/mp4",
+    }
+    with video.open("rb") as stream:
+        response = requests.post(upload_uri, headers=headers, data=stream, timeout=(30, 600))
+    try:
+        upload_result = response.json()
+    except ValueError:
+        upload_result = {"raw": response.text[:1000]}
+    if not response.ok or upload_result.get("success") is False or upload_result.get("error"):
+        raise RuntimeError(f"Instagram direct upload failed ({response.status_code}): {upload_result}")
+    print(f"Instagram direct upload complete: {video.name} ({file_size} bytes)")
+
     status = ""
     for attempt in range(30):
         state = graph_request(
@@ -241,52 +207,32 @@ def instagram_publish() -> None:
         time.sleep(10 if attempt < 6 else 20)
     else:
         raise TimeoutError("Instagram media container did not finish processing within 10 minutes.")
+
     published = graph_request(
-        "POST",
-        f"{os.environ['INSTAGRAM_USER_ID']}/media_publish",
+        "POST", f"{os.environ['INSTAGRAM_USER_ID']}/media_publish",
         data={"creation_id": container_id, "access_token": token},
     )
     report = json.loads(REPORT.read_text(encoding="utf-8"))
     report["instagram"] = {
-        "status": "published",
-        "container_id": container_id,
-        "media_id": published.get("id"),
-        "caption": meta["caption"],
+        "status": "published", "container_id": container_id,
+        "media_id": published.get("id"), "caption": meta["caption"],
     }
     write_report(report)
     print(f"Instagram Reel published. Media ID: {published.get('id')}")
-
-
-def cleanup() -> None:
-    key_file = ROOT / "s3-object-key.txt"
-    if not key_file.exists() or not os.getenv("S3_BUCKET"):
-        print("No temporary S3 object key found; skipping cleanup.")
-        return
-    s3_client().delete_object(
-        Bucket=os.environ["S3_BUCKET"],
-        Key=key_file.read_text(encoding="utf-8").strip(),
-    )
-    print("Deleted temporary S3 object.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--youtube", action="store_true")
-    parser.add_argument("--host-video", action="store_true")
     parser.add_argument("--instagram", action="store_true")
-    parser.add_argument("--cleanup", action="store_true")
     args = parser.parse_args()
     if args.prepare:
         prepare()
     elif args.youtube:
         youtube_upload()
-    elif args.host_video:
-        host_video()
     elif args.instagram:
         instagram_publish()
-    elif args.cleanup:
-        cleanup()
     else:
         parser.error("Select one publishing action")
 
