@@ -42,25 +42,25 @@ def load_generated() -> tuple[Path, dict[str, Any]]:
 
 def make_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     lang = os.getenv("LANGUAGE", "te").lower()
-    title = re.sub(r"\\s+", " ", str(metadata.get("title") or "AI News Update")).strip()[:95]
+    title = re.sub(r"\s+", " ", str(metadata.get("title") or "AI News Update")).strip()[:95]
     source = metadata["source"]
     publisher = str(source.get("source", "Original source"))
     source_url = str(source.get("url", ""))
     tags = ["AI", "ArtificialIntelligence", "Technology", "TechNews", "AIUpdates",
             "MachineLearning", "Shorts", "Reels"]
     if lang == "te":
-        caption = (f"🚀 తాజా AI & టెక్నాలజీ అప్‌డేట్!\\n\\n{title}\\n\\n"
-                   f"ఈ వార్త ఎందుకు ముఖ్యమో 60 సెకన్లలో తెలుసుకోండి.\\n"
-                   f"మూలం: {publisher}\\nపూర్తి కథనం: {source_url}\\n\\n"
+        caption = (f"🚀 తాజా AI & టెక్నాలజీ అప్‌డేట్!\n\n{title}\n\n"
+                   f"ఈ వార్త ఎందుకు ముఖ్యమో 60 సెకన్లలో తెలుసుకోండి.\n"
+                   f"మూలం: {publisher}\nపూర్తి కథనం: {source_url}\n\n"
                    "#TeluguTech #AITelugu #TechNews #AIUpdates #ArtificialIntelligence "
                    "#Technology #MachineLearning #TeluguReels #TeluguShorts #DailyTech")
     else:
-        caption = (f"🚀 Your 60-second AI & technology briefing.\\n\\n{title}\\n\\n"
-                   f"Why it matters, explained simply.\\nSource: {publisher}\\n"
-                   f"Read the full report: {source_url}\\n\\n"
+        caption = (f"🚀 Your 60-second AI & technology briefing.\n\n{title}\n\n"
+                   f"Why it matters, explained simply.\nSource: {publisher}\n"
+                   f"Read the full report: {source_url}\n\n"
                    "#AI #TechNews #ArtificialIntelligence #AIUpdates #Technology "
                    "#MachineLearning #TechReels #YouTubeShorts #DailyTech")
-    description = (caption + "\\n\\nNews summary for education and information. Details may evolve; "
+    description = (caption + "\n\nNews summary for education and information. Details may evolve; "
                    "please read the original source linked above. "
                    "All trademarks and article rights belong to their respective owners.")
     return {
