@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: "Generate workflow run ID (leave empty to use this workflow run; artifact naming must match the generator)"
-        required: false
+        description: "ID of the successful Generate AI News Reel run to publish"
+        required: true
         type: string
       publish_to:
         description: "Platforms to publish to"
@@ -17,7 +17,7 @@ on:
         type: choice
         options: [both, youtube, instagram]
       approval:
-        description: "Type PUBLISH to confirm public publishing"
+        description: "Type PUBLISH to confirm publishing"
         required: true
         type: string
 
@@ -54,13 +54,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Resolve manual generation run number
+        id: source-run
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GENERATION_RUN_ID: ${{ inputs.artifact_run_id }}
+        run: |
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GENERATION_RUN_ID")"
+          run_number="$(python -c 'import json,sys; print(json.load(sys.stdin)["run_number"])' <<< "$run_json")"
+          conclusion="$(python -c 'import json,sys; print(json.load(sys.stdin)["conclusion"] or "")' <<< "$run_json")"
+          workflow_name="$(python -c 'import json,sys; print(json.load(sys.stdin)["name"])' <<< "$run_json")"
+          if [ "$workflow_name" != "Generate AI News Reel" ] || [ "$conclusion" != "success" ]; then
+            echo "Run ID must identify a successful Generate AI News Reel run." >&2
+            exit 1
+          fi
+          echo "run_number=$run_number" >> "$GITHUB_OUTPUT"
+
       - name: Download generated reel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ai-news-reel-${{ github.event.workflow_run.run_number || inputs.artifact_run_id }}
+          name: ai-news-reel-${{ github.event.workflow_run.run_number || steps.source-run.outputs.run_number }}
           path: output
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id || inputs.artifact_run_id || github.run_id }}
+          run-id: ${{ github.event.workflow_run.id || inputs.artifact_run_id }}
 
       - name: Validate generated files and build metadata
         run: python -m app.publish --prepare
