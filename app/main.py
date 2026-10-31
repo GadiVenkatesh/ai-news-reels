@@ -165,47 +165,77 @@ def get_story() -> dict:
     return stories[0]
 
 
-def fallback_script(story: dict) -> dict:
+def translate_text(text: str, target_language: str) -> str:
+    """Translate a short news field using Google's public translation endpoint."""
+    if not text.strip() or target_language == "en":
+        return text
+    response = requests.get(
+        "https://translate.googleapis.com/translate_a/single",
+        params={"client": "gtx", "sl": "auto", "tl": "te", "dt": "t", "q": text},
+        timeout=25,
+        headers={"User-Agent": "Mozilla/5.0 ai-news-reels/1.0"},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    translated = "".join(part[0] for part in payload[0] if part and part[0])
+    if not translated.strip():
+        raise RuntimeError("Translation returned empty Telugu text.")
+    return translated.strip()
+
+
+def localize_story(story: dict, language: str) -> dict:
+    localized = dict(story)
+    if language == "te":
+        localized["title"] = translate_text(story["title"], language)
+        localized["summary"] = translate_text(story["summary"], language)
+    return localized
+
+
+def fallback_script(story: dict, language: str = "en") -> dict:
     summary = (
         story["summary"]
-        or "This is a development worth watching. Open the source link for details."
+        or ("ఈ వార్తపై మరిన్ని వివరాల కోసం మూల కథనాన్ని చూడండి." if language == "te"
+            else "This is a development worth watching. Open the source link for details.")
     )[:420]
-    narration = (
-        f"Here is your AI tech update. {story['title']}. "
-        f"According to {story['source']}, {summary} "
-        "The key takeaway is to watch how this development affects AI users, "
-        "developers, and businesses. Check the source link for the full report."
-    )
-    scenes = [
-        {"heading": "AI TECH UPDATE", "caption": story["title"]},
-        {"heading": "WHAT WE KNOW", "caption": summary[:220]},
-        {
-            "heading": "WHY IT MATTERS",
-            "caption": (
-                "A development to watch for AI users, developers, and businesses."
-            ),
-        },
-        {
-            "heading": "FOLLOW FOR MORE",
-            "caption": "Daily AI and technology updates",
-        },
-    ]
-    return {
-        "title": story["title"],
-        "narration": narration,
-        "scenes": scenes,
-    }
+    if language == "te":
+        narration = (
+            f"ఇది మీ రోజువారీ ఏఐ టెక్నాలజీ వార్త. {story['title']}. "
+            f"{story['source']} కథనం ప్రకారం, {summary} "
+            "ఈ పరిణామం ఏఐ వినియోగదారులు, డెవలపర్లు, వ్యాపారాలపై ఎలా ప్రభావం చూపుతుందో గమనించాలి. "
+            "మరిన్ని వివరాల కోసం మూల కథనాన్ని చూడండి."
+        )
+        scenes = [
+            {"heading": "ఏఐ టెక్ అప్‌డేట్", "caption": story["title"]},
+            {"heading": "మనకు తెలిసిన విషయం", "caption": summary[:220]},
+            {"heading": "ఇది ఎందుకు ముఖ్యం", "caption": "ఏఐ వినియోగదారులు, డెవలపర్లు, వ్యాపారాలకు ఈ వార్త ముఖ్యం."},
+            {"heading": "మరిన్ని వార్తల కోసం", "caption": "రోజువారీ ఏఐ మరియు టెక్నాలజీ అప్‌డేట్స్"},
+        ]
+    else:
+        narration = (
+            f"Here is your AI tech update. {story['title']}. "
+            f"According to {story['source']}, {summary} "
+            "The key takeaway is to watch how this development affects AI users, "
+            "developers, and businesses. Check the source link for the full report."
+        )
+        scenes = [
+            {"heading": "AI TECH UPDATE", "caption": story["title"]},
+            {"heading": "WHAT WE KNOW", "caption": summary[:220]},
+            {"heading": "WHY IT MATTERS", "caption": "A development to watch for AI users, developers, and businesses."},
+            {"heading": "FOLLOW FOR MORE", "caption": "Daily AI and technology updates"},
+        ]
+    return {"title": story["title"], "narration": narration, "scenes": scenes}
 
 
-def make_script(story: dict) -> dict:
+def make_script(story: dict, language: str = "en") -> dict:
     if os.getenv("USE_OLLAMA", "false").lower() != "true":
-        return fallback_script(story)
+        return fallback_script(story, language)
 
+    language_name = "Telugu" if language == "te" else "English"
     prompt = (
-        "Write a factual voiceover for a 60-second vertical short, around "
-        "120-135 words. Use only facts in the supplied story; do not invent "
-        "numbers or quotes. Return JSON with keys title, narration, scenes; "
-        "scenes is four objects with heading and caption.\n"
+        f"Write a factual {language_name} voiceover for exactly a 60-second vertical short, "
+        "around 120-135 words. Use only facts in the supplied story; do not invent "
+        "numbers or quotes. All narration and on-screen text must be in the requested language. "
+        "Return JSON with keys title, narration, scenes; scenes is four objects with heading and caption.\n"
         f"Headline: {story['title']}\nPublisher: {story['source']}\n"
         f"Summary: {story['summary']}\nURL: {story['url']}"
     )
@@ -234,10 +264,11 @@ def make_script(story: dict) -> dict:
         return fallback_script(story)
 
 
-async def tts(text: str, path: Path) -> None:
+async def tts(text: str, path: Path, language: str = "en") -> None:
+    default_voice = "te-IN-ShrutiNeural" if language == "te" else "en-US-GuyNeural"
     communicate = edge_tts.Communicate(
         text=text,
-        voice=os.getenv("TTS_VOICE", "en-IN-PrabhatNeural"),
+        voice=os.getenv("TTS_VOICE", default_voice),
         rate=os.getenv("TTS_RATE", "+12%"),
         pitch=os.getenv("TTS_PITCH", "+0Hz"),
     )
@@ -289,6 +320,7 @@ def make_card(
     width: int,
     height: int,
     photo_path: Path | None = None,
+    language: str = "en",
 ) -> None:
     # Use the real article thumbnail as a full-bleed background when available.
     if photo_path and photo_path.exists():
@@ -319,7 +351,7 @@ def make_card(
     )
     draw.text(
         (margin, int(height * 0.15)),
-        "THE DAILY SIGNAL  /  AI + TECH",
+        "రోజువారీ ఏఐ వార్తలు / టెక్" if language == "te" else "THE DAILY SIGNAL  /  AI + TECH",
         font=font(int(width * 0.032), True),
         fill=(100, 235, 220),
     )
@@ -355,7 +387,7 @@ def make_card(
     )
     draw.text(
         (margin + 20, int(height * 0.835)),
-        f"STORY {index}/{total}",
+        (f"వార్త {index}/{total}" if language == "te" else f"STORY {index}/{total}"),
         font=font(int(width * 0.03), True),
         fill=(0, 220, 195),
     )
@@ -367,7 +399,7 @@ def make_card(
     )
     draw.text(
         (margin, int(height * 0.93)),
-        "VERIFY THE SOURCE  •  FOLLOW FOR MORE",
+        "మూలాన్ని పరిశీలించండి • మరిన్ని వార్తల కోసం" if language == "te" else "VERIFY THE SOURCE  •  FOLLOW FOR MORE",
         font=font(int(width * 0.024), True),
         fill=(185, 199, 220),
     )
@@ -408,23 +440,28 @@ def render(
     video_path: Path,
     width: int,
     height: int,
+    language: str = "en",
+    duration: int = 60,
 ) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("FFmpeg not found. Install FFmpeg and verify PATH.")
+    if duration != 60:
+        raise ValueError("This project always renders exactly 60-second videos.")
 
-    # Build a 60-second slideshow using image inputs directly. This avoids
-    # encoding multiple MP4 files and then concatenating those MP4 streams.
     work = video_path.parent / "render_tmp"
     work.mkdir(parents=True, exist_ok=True)
-    image_paths: list[Path] = []
     photo_path = download_story_image(story, work / "article-thumbnail.jpg")
     if photo_path:
         print("[INFO] Using the article thumbnail as the scene background.")
     else:
         print("[WARN] This feed item has no downloadable thumbnail; using designed cards.")
 
-    for index, scene in enumerate(scenes[:4]):
+    selected_scenes = scenes[:4]
+    while len(selected_scenes) < 4:
+        selected_scenes.append({"heading": "AI TECH UPDATE", "caption": story["title"]})
+    image_paths: list[Path] = []
+    for index, scene in enumerate(selected_scenes):
         image_path = work / f"scene_{index + 1:02d}.png"
         make_card(
             image_path,
@@ -432,74 +469,60 @@ def render(
             str(scene.get("caption", "")),
             story["source"],
             index + 1,
-            min(len(scenes), 4),
+            4,
             width,
             height,
             photo_path=photo_path,
+            language=language,
         )
         image_paths.append(image_path)
 
-    if not image_paths:
-        raise RuntimeError("No scene cards were generated.")
-
-    concat_path = work / "images.txt"
-    entries = []
+    # Loop each still image as a 15-second, 30-fps stream and concatenate the
+    # streams. This avoids concat-demuxer timestamps freezing a scene early.
+    args = [ffmpeg, "-y"]
     for image_path in image_paths:
-        entries.append(f"file '{image_path.resolve().as_posix()}'\nduration 15\n")
-    entries.append(f"file '{image_paths[-1].resolve().as_posix()}'\n")
-    concat_path.write_text("".join(entries), encoding="utf-8")
+        args.extend(["-loop", "1", "-framerate", "30", "-t", "15", "-i", str(image_path)])
+    args.extend(["-i", str(audio_path)])
+
+    filters = []
+    for index in range(4):
+        filters.append(
+            f"[{index}:v]scale={width}:{height},fps=30,format=yuv420p,"
+            f"setsar=1,setpts=PTS-STARTPTS[v{index}]"
+        )
+    filters.append("[v0][v1][v2][v3]concat=n=4:v=1:a=0,trim=duration=60,setpts=PTS-STARTPTS[v]")
 
     audio_duration = ffprobe_duration(audio_path)
-    atempo = min(1.5, max(1.0, audio_duration / 59.0))
-    audio_filter = f"atempo={atempo:.5f},apad,atrim=duration=60"
-
-    run_ffmpeg(
-        [
-            ffmpeg,
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_path),
-            "-i",
-            str(audio_path),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            "-vf",
-            f"scale={width}:{height},fps=30,format=yuv420p",
-            "-af",
-            audio_filter,
-            "-t",
-            "60",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "23",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-shortest",
-            "-movflags",
-            "+faststart",
-            str(video_path),
-        ]
-    )
+    # Keep the complete voice-over inside 60 seconds; pad silence only if it is shorter.
+    atempo = min(2.0, max(1.0, audio_duration / 59.5))
+    filters.append(f"[4:a]atempo={atempo:.5f},apad,atrim=duration=60,asetpts=PTS-STARTPTS[a]")
+    args.extend([
+        "-filter_complex", ";".join(filters),
+        "-map", "[v]", "-map", "[a]",
+        "-t", "60",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        str(video_path),
+    ])
+    run_ffmpeg(args)
+    actual_duration = ffprobe_duration(video_path)
+    if abs(actual_duration - 60.0) > 0.25:
+        raise RuntimeError(f"Final MP4 is {actual_duration:.3f}s; expected exactly 60 seconds.")
+    print(f"[INFO] Verified final MP4 duration: {actual_duration:.3f} seconds")
 
 def main() -> None:
     output = Path(os.getenv("OUTPUT_DIR", "output"))
     output.mkdir(parents=True, exist_ok=True)
     print("[1/4] Collecting news...")
+    language = os.getenv("LANGUAGE", "te").strip().lower()
+    if language not in ("te", "en"):
+        raise ValueError("LANGUAGE must be 'te' (Telugu) or 'en' (English).")
     story = get_story()
-    print("Selected:", story["title"], "|", story["source"])
+    story = localize_story(story, language)
+    print("Selected:", story["title"], "|", story["source"], "| language:", language)
 
-    script = make_script(story)
+    script = make_script(story, language)
     scenes = script.get("scenes", [])[:4]
     while len(scenes) < 4:
         scenes.append(
@@ -518,7 +541,7 @@ def main() -> None:
 
     audio_path = output / f"{stem}-voice.mp3"
     print("[2/4] Generating voice-over...")
-    asyncio.run(tts(narration, audio_path))
+    asyncio.run(tts(narration, audio_path, language))
 
     script_path = output / f"{stem}.json"
     script_path.write_text(
@@ -545,6 +568,8 @@ def main() -> None:
         video_path,
         env_int("VIDEO_WIDTH", 1080),
         env_int("VIDEO_HEIGHT", 1920),
+        language=language,
+        duration=60,
     )
 
     (output / f"{stem}-source.txt").write_text(
