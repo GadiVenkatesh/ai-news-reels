@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: "Generate workflow run ID (leave empty to use latest successful run)"
-        required: false
+        description: "ID of the successful Generate AI News Reel run to publish"
+        required: true
         type: string
       publish_to:
         description: "Platforms to publish to"
@@ -17,7 +17,7 @@ on:
         type: choice
         options: [both, youtube, instagram]
       approval:
-        description: "Type PUBLISH to confirm public publishing"
+        description: "Type PUBLISH to confirm publishing"
         required: true
         type: string
 
@@ -36,6 +36,9 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      OUTPUT_DIR: output
+      PUBLISH_TO: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to || 'both' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -51,28 +54,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Resolve manual generation run number
+        id: source-run
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GENERATION_RUN_ID: ${{ inputs.artifact_run_id }}
+        run: |
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GENERATION_RUN_ID")"
+          run_number="$(python -c 'import json,sys; print(json.load(sys.stdin)["run_number"])' <<< "$run_json")"
+          conclusion="$(python -c 'import json,sys; print(json.load(sys.stdin)["conclusion"] or "")' <<< "$run_json")"
+          workflow_name="$(python -c 'import json,sys; print(json.load(sys.stdin)["name"])' <<< "$run_json")"
+          if [ "$workflow_name" != "Generate AI News Reel" ] || [ "$conclusion" != "success" ]; then
+            echo "Run ID must identify a successful Generate AI News Reel run." >&2
+            exit 1
+          fi
+          echo "run_number=$run_number" >> "$GITHUB_OUTPUT"
+
       - name: Download generated reel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ai-news-reel-${{ github.event.workflow_run.run_number || inputs.artifact_run_id }}
+          name: ai-news-reel-${{ github.event.workflow_run.run_number || steps.source-run.outputs.run_number }}
           path: output
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id || inputs.artifact_run_id || github.run_id }}
+          run-id: ${{ github.event.workflow_run.id || inputs.artifact_run_id }}
 
       - name: Validate generated files and build metadata
-        run: |
-          python -m app.publish --prepare
-        env:
-          OUTPUT_DIR: output
-          PUBLISH_TO: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to || 'both' }}
-
-      - name: Configure AWS credentials
-        if: ${{ env.PUBLISH_TO != 'youtube' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+        run: python -m app.publish --prepare
 
       - name: Publish to YouTube Shorts
         if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'youtube' }}
@@ -84,30 +92,13 @@ jobs:
           YOUTUBE_CATEGORY_ID: ${{ vars.YOUTUBE_CATEGORY_ID || '28' }}
         run: python -m app.publish --youtube
 
-      - name: Upload video to temporary public S3 object
-        if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram' }}
-        id: video-host
-        env:
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: python -m app.publish --host-video
-
-      - name: Publish Instagram Reel
+      - name: Publish Instagram Reel using direct resumable upload
         if: ${{ env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram' }}
         env:
           INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           META_GRAPH_API_VERSION: ${{ vars.META_GRAPH_API_VERSION || 'vXX.X' }}
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: python -m app.publish --instagram
-
-      - name: Delete temporary S3 video
-        if: ${{ always() && (env.PUBLISH_TO == 'both' || env.PUBLISH_TO == 'instagram') }}
-        env:
-          S3_BUCKET: ${{ secrets.PUBLISH_S3_BUCKET }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: python -m app.publish --cleanup || true
 
       - name: Upload publishing report
         if: always()
