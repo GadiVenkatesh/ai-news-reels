@@ -10,7 +10,9 @@ The workflow generates a downloadable artifact for you to review. It does **not*
 - Ranks stories using topic keywords and publication recency.
 - Creates a short factual narration using optional local Ollama, with a template fallback.
 - Generates voice-over audio with Edge TTS.
-- Renders four 15-second branded cards into a 1080×1920 H.264/AAC MP4.
+- Downloads an article thumbnail from RSS media fields or article summary HTML when available, then uses it as a darkened full-screen background behind each scene's text.
+- Falls back to designed text cards when the selected RSS item has no downloadable image.
+- Renders four 15-second scenes into a 1080×1920 H.264/AAC MP4.
 - Targets a 60-second output: shorter voice-overs are padded with silence; longer ones are sped up by up to 1.5× before the 60-second trim.
 - Saves the MP4, script JSON, voice-over MP3, and source note under `output/`.
 
@@ -85,7 +87,7 @@ Copy `.env.example` to `.env` and adjust:
 ## Limitations and review
 
 - Keyword ranking is a simple relevance heuristic; it is not a measure of global trend popularity.
-- Current visuals are typographic cards, not AI-generated photographic scenes.
+- Visuals use the selected article's thumbnail when the RSS feed exposes one. Some feeds do not provide images, so the app falls back to typographic cards. This version does not generate original images with a diffusion model.
 - Edge TTS needs an internet connection.
 - Review names, facts, pronunciation, narration timing, source attribution, and media rights before publishing.
 - The workflow stores output as an Actions artifact for 14 days; it does not post to social accounts.
