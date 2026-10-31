@@ -26,3 +26,28 @@ def test_extract_image_from_rss_media_thumbnail():
 def test_extract_image_from_summary_html():
     entry = {"summary": '<p>News</p><img src="https://example.com/news.png">'}
     assert extract_image_url(entry) == "https://example.com/news.png"
+
+
+
+def test_telugu_fallback_script_uses_telugu_text():
+    story = {
+        "title": "కొత్త ఏఐ టూల్",
+        "summary": "డెవలపర్లకు సహాయపడే కొత్త సాధనం.",
+        "source": "Example News",
+        "url": "https://example.com",
+    }
+    result = fallback_script(story, "te")
+    assert "ఇది మీ రోజువారీ" in result["narration"]
+    assert "ఏఐ టెక్ అప్‌డేట్" in result["scenes"][0]["heading"]
+
+
+def test_english_fallback_script_uses_english_text():
+    story = {
+        "title": "A new AI tool",
+        "summary": "It helps developers.",
+        "source": "Example News",
+        "url": "https://example.com",
+    }
+    result = fallback_script(story, "en")
+    assert result["narration"].startswith("Here is your AI tech update.")
+    assert result["scenes"][0]["heading"] == "AI TECH UPDATE"
